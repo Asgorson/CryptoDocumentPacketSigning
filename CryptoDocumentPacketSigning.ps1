@@ -1,6 +1,6 @@
 $pathToUnsigned = "~\Desktop\AutoSigning\Unsigned\"
 $pathToSigned = "~\Desktop\AutoSigning\Signed\"
-#$thumbprint = "ec592c195771aaf224d3044d156828430bf53eab" # отпечаток Виги
+$thumbprint = "EC592c195771aaf224d3044d156828430bf53eab" # отпечаток Виги
 
 # переименование неподписанного документа
 function changeUnsignedFileName($pathToUnsigned){
@@ -19,17 +19,33 @@ function changeUnsignedFileName($pathToUnsigned){
     return $data
 }
 
-# возврат актуального имени документа
+# возврат актуального имени документа тест
 function returnActualName($pathToFolder, $changedFilenameArray, $actualFileNameArray, $key){
     if($key -eq "signed"){
         for($i=0; $i -lt $actualFileNameArray.length; $i++){
             $fullFilePath = $pathToFolder + $changedFilenameArray[$i] + ".sig"
-            Rename-Item -path $fullFilePath -newName ($actualFileNameArray[$i] + ".sig")
+            try{
+                Rename-Item -path $fullFilePath -newName ($actualFileNameArray[$i] + ".sig") -ErrorAction Stop
+            }catch{
+                if($_.Exception.Message -like "*не существует*"){
+                    Write-Host "Файл не найден"
+                }else{
+                    Write-Error "$_.ExceptionMessage"
+                }
+            }
         }
     }elseif($key -eq "unsigned"){
         for($i=0; $i -lt $actualFileNameArray.length; $i++){
             $fullFilePath = $pathToFolder + $changedFilenameArray[$i]
-            Rename-Item -path $fullFilePath -newName ($actualFileNameArray[$i])
+            try{
+                Rename-Item -path $fullFilePath -newName ($actualFileNameArray[$i]) -ErrorAction Stop
+            }catch{
+                if($_.Exception.Message -like "*не существует*"){
+                    Write-Host "Файл не найден"
+                }else{
+                    Write-Error "$_.Exception.Message"
+                }
+            }
         }
     }
     
@@ -38,12 +54,11 @@ function returnActualName($pathToFolder, $changedFilenameArray, $actualFileNameA
 function getThumbprint(){
     $bossName = (Read-Host "`nВведите фамилию руководителя, на которого оформлена подпись").Trim()
     $certArray = Get-ChildItem -Path "Cert:\CurrentUser\My" | Where {$_.Subject -like "*$bossName*"}
-    $currentDate = Get-Date -Format "dd.MM.yy hh.mm.ss"
-    $currentDate = [System.DateTime]::ParseExact($date, 'dd.MM.yy HH:mm:ss', $null)
-    foreach($i in $certArray){
-        if($currentDate -lt $i.notAfter){
+    $currentDate = Get-Date
+    foreach($cert in $certArray){
+        if($currentDate -lt $cert.notAfter){
             Write-Host "`n-----------------------------------------------------------------------------"
-            Write-Host "`nСертификат: `n$($i.subject) `n`nОтпечаток: `n$($i.thumbprint) `n`nИстекает: `n$($i.notAfter)"
+            Write-Host "`nСертификат: `n$($cert.subject) `n`nОтпечаток: `n$($cert.thumbprint) `n`nИстекает: `n$($cert.notAfter)"
             Write-Host "`n-----------------------------------------------------------------------------"
         }
     }
@@ -51,10 +66,14 @@ function getThumbprint(){
     return $thumbPrint
 }
 
-
-$thumbpring = getThumbprint
-Start-Process "C:\Program Files (x86)\Common Files\Crypto Pro\Shared\cptools.exe"   # запуск программы
-Start-Sleep -Seconds 10              # ожидание запуска программы
+# перед выполнением скрипта нужно выбрать английскую раскладку, иначе иммитация нажатия клавиш будет некорректной
+$thumbprint = getThumbprint
+Set-WinUserLanguageList -LanguageList en-US, ru-ru -force
+$process = Start-Process -passThru -FilePath "C:\Program Files (x86)\Common Files\Crypto Pro\Shared\cptools.exe"   # запуск программы             # ожидание запуска программы
+$wshell = New-Object -ComObject WScript.Shell
+while(!$wshell.AppActivate($process.ID)){
+    Start-Sleep -s 0.2              # ожидание запуска программы
+}              
 $wshell = New-Object -ComObject WScript.Shell
 Start-Sleep -Milliseconds 500       # ожидание выполнения команды
 $wshell.SendKeys("{TAB}")           # переход в поле вкладок
@@ -87,9 +106,9 @@ Start-Sleep -Milliseconds 1000
 returnActualName $pathToUnsigned.path $data.changedFilenameArray $data.actualFileNameArray "unsigned"   # Возврат актуального имени неподписанного файла 
 Start-Sleep -Milliseconds 1000
 returnActualName $pathToSigned.path $data.changedFilenameArray $data.actualFileNameArray "signed"       # Возврат актуального имени подписанного файла
+Set-WinUserLanguageList -LanguageList ru-ru, en-US -Force
 
-
-#1 tab - Перейти в поле вкладок
+#1 tab - Перейти в поле вкладок 
 #4 down - Перейти во вкладку "Создание подиси"
 #2 tab - Пеерйти в поле "Поиск сертификата"
 #1 tab - Перейти в поле выбора пути для неподписанного файла
